@@ -51,11 +51,11 @@ jobs:
         mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
         -Danypoint.username="${{ secrets.USER }}" \
         -Danypoint.password="${{ secrets.PASS }}" \
-        -Danypoint.businessGroup=a62f6236-0b02-4e5f-a8eb-dc5e37aedb12 \
+        -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
         -Denv="${{ secrets.ENV }}" \
         -Dappname="${{ secrets.APP_NAME }}" \
-        -Danypoint.platform.client_id=777df98bcd084a75bfe4b973a9e53516 \
-        -Danypoint.platform.client_secret=AF10d59Ee8C64EFb85BCc8474b2aA7eD
+        -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+        -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
         
          
   deployuat:
@@ -77,11 +77,11 @@ jobs:
         mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
         -Danypoint.username="${{ secrets.USER }}" \
         -Danypoint.password="${{ secrets.PASS }}" \
-        -Danypoint.businessGroup=a62f6236-0b02-4e5f-a8eb-dc5e37aedb12 \
+        -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
         -Denv="${{ secrets.ENV }}" \
         -Dappname="${{ secrets.APP_NAME }}" \
-        -Danypoint.platform.client_id=b5b72434253f480c8405d9cb8d853fed \
-        -Danypoint.platform.client_secret=d7d4Ff82Be8f49949661Ffd3ED535D46
+        -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+        -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
   
   # deployprod:
   #   needs: deployuat
@@ -100,8 +100,11 @@ jobs:
   #   - name: Deploy to prod
   #     run: |
   #       mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-  #       -Duser="${{ secrets.USER }}" \
-  #       -Dpass="${{ secrets.PASS }}" \
+  #       -Danypoint.username="${{ secrets.USER }}" \
+  #       -Danypoint.password="${{ secrets.PASS }}" \
+  #       -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
   #       -Denv="${{ secrets.ENV }}" \
-  #       -DappName="${{ secrets.APP_NAME }}" \
+  #       -Dappname="${{ secrets.APP_NAME }}" \
+  #       -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+  #       -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
          
