@@ -1,5 +1,5 @@
 name: Reusable Workflow To Deploy MuleSoft Application
- 
+
 on:
   workflow_call:
 
@@ -22,66 +22,231 @@ jobs:
         with:
           distribution: "zulu"
           java-version: 17
+
       - name: Build JAR
         run: mvn clean package -DmuleDeploy
+
       - name: Publish to Exchange
         run: |
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests \
-          -Danypoint.username="${{ secrets.USER }}" \
-          -Danypoint.password="${{ secrets.PASS }}" 
-
-
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}"
 
   deploydev:
     needs: build
     runs-on: ubuntu-latest
     environment: dev
-    steps:    
-    - name: Checkout this repo
-      uses: actions/checkout@v4
-    - name: Cache dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-        restore-keys: |
-          ${{ runner.os }}-maven-       
-    - name: Deploy to dev
-      run: |
-        mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-        -Danypoint.username="${{ secrets.USER }}" \
-        -Danypoint.password="${{ secrets.PASS }}" \
-        -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-        -Denv="${{ secrets.ENV }}" \
-        -Dappname="${{ secrets.APP_NAME }}" \
-        -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-        -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
-        
-         
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Save current deployed version (Dev)
+        run: |
+          ACCESS_TOKEN=$(curl -s -X POST https://anypoint.mulesoft.com/accounts/api/v2/oauth2/token \
+            -H 'Content-Type: application/json' \
+            -d '{"client_id":"${{ secrets.ENV_CLIENT_ID }}","client_secret":"${{ secrets.ENV_CLIENT_SECRET }}","grant_type":"client_credentials"}' \
+            | jq -r '.access_token')
+          curl -s -X GET \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "X-ANYPNT-ORG-ID: ${{ secrets.ANYPOINT_ORG_ID }}" \
+            -H "X-ANYPNT-ENV-ID: ${{ secrets.ENV_ID }}" \
+            "https://anypoint.mulesoft.com/cloudhub/api/v2/applications/${{ secrets.APP_NAME }}" \
+            | jq -r '.fileVersion' > previous_version.txt
+
+      - name: Deploy to Dev
+        run: |
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}" \
+            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+            -Denv="${{ secrets.ENV }}" \
+            -Dappname="${{ secrets.APP_NAME }}" \
+            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+
+      - name: Health Check (Dev)
+        id: health_dev
+        continue-on-error: true
+        run: |
+          sleep 60
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.APP_NAME }}.cloudhub.io/health)
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+
+      - name: Rollback if Health Check Fails (Dev)
+        if: steps.health_dev.outputs.status != '200'
+        run: |
+          PREVIOUS_VERSION=$(cat previous_version.txt)
+          echo "Rolling back to version $PREVIOUS_VERSION"
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}" \
+            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+            -Denv="${{ secrets.ENV }}" \
+            -Dappname="${{ secrets.APP_NAME }}" \
+            -Dapp.version=$PREVIOUS_VERSION \
+            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+
   deployuat:
     needs: deploydev
     runs-on: ubuntu-latest
     environment: uat
-    steps:    
-    - name: Checkout this repo
-      uses: actions/checkout@v4
-    - name: Cache dependencies
-      uses: actions/cache@v4
-      with:
-        path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-        restore-keys: |
-          ${{ runner.os }}-maven-
-    - name: Deploy to uat
-      run: |
-        mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-        -Danypoint.username="${{ secrets.USER }}" \
-        -Danypoint.password="${{ secrets.PASS }}" \
-        -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-        -Denv="${{ secrets.ENV }}" \
-        -Dappname="${{ secrets.APP_NAME }}" \
-        -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-        -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Save current deployed version (UAT)
+        run: |
+          ACCESS_TOKEN=$(curl -s -X POST https://anypoint.mulesoft.com/accounts/api/v2/oauth2/token \
+            -H 'Content-Type: application/json' \
+            -d '{"client_id":"${{ secrets.ENV_CLIENT_ID }}","client_secret":"${{ secrets.ENV_CLIENT_SECRET }}","grant_type":"client_credentials"}' \
+            | jq -r '.access_token')
+          curl -s -X GET \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "X-ANYPNT-ORG-ID: ${{ secrets.ANYPOINT_ORG_ID }}" \
+            -H "X-ANYPNT-ENV-ID: ${{ secrets.ENV_ID }}" \
+            "https://anypoint.mulesoft.com/cloudhub/api/v2/applications/${{ secrets.APP_NAME }}" \
+            | jq -r '.fileVersion' > previous_version_uat.txt
+
+      - name: Deploy to UAT
+        run: |
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}" \
+            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+            -Denv="${{ secrets.ENV }}" \
+            -Dappname="${{ secrets.APP_NAME }}" \
+            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+
+      - name: Health Check (UAT)
+        id: health_uat
+        continue-on-error: true
+        run: |
+          sleep 60
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://${{ secrets.APP_NAME }}.cloudhub.io/health)
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+
+      - name: Rollback if Health Check Fails (UAT)
+        if: steps.health_uat.outputs.status != '200'
+        run: |
+          PREVIOUS_VERSION=$(cat previous_version_uat.txt)
+          echo "Rolling back to version $PREVIOUS_VERSION"
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}" \
+            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+            -Denv="${{ secrets.ENV }}" \
+            -Dappname="${{ secrets.APP_NAME }}" \
+            -Dapp.version=$PREVIOUS_VERSION \
+            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+
+
+
+
+
+
+
+
+# name: Reusable Workflow To Deploy MuleSoft Application
+ 
+# on:
+#   workflow_call:
+
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout this repo
+#         uses: actions/checkout@v4
+
+#       - name: Cache dependencies
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.m2/repository
+#           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+#           restore-keys: ${{ runner.os }}-maven-
+
+#       - name: Set up JDK 17
+#         uses: actions/setup-java@v4
+#         with:
+#           distribution: "zulu"
+#           java-version: 17
+#       - name: Build JAR
+#         run: mvn clean package -DmuleDeploy
+#       - name: Publish to Exchange
+#         run: |
+#           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests \
+#           -Danypoint.username="${{ secrets.USER }}" \
+#           -Danypoint.password="${{ secrets.PASS }}" 
+
+
+
+#   deploydev:
+#     needs: build
+#     runs-on: ubuntu-latest
+#     environment: dev
+#     steps:    
+#     - name: Checkout this repo
+#       uses: actions/checkout@v4
+#     - name: Cache dependencies
+#       uses: actions/cache@v4
+#       with:
+#         path: ~/.m2/repository
+#         key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+#         restore-keys: |
+#           ${{ runner.os }}-maven-       
+#     - name: Deploy to dev
+#       run: |
+#         mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+#         -Danypoint.username="${{ secrets.USER }}" \
+#         -Danypoint.password="${{ secrets.PASS }}" \
+#         -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+#         -Denv="${{ secrets.ENV }}" \
+#         -Dappname="${{ secrets.APP_NAME }}" \
+#         -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+#         -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+        
+         
+#   deployuat:
+#     needs: deploydev
+#     runs-on: ubuntu-latest
+#     environment: uat
+#     steps:    
+#     - name: Checkout this repo
+#       uses: actions/checkout@v4
+#     - name: Cache dependencies
+#       uses: actions/cache@v4
+#       with:
+#         path: ~/.m2/repository
+#         key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+#         restore-keys: |
+#           ${{ runner.os }}-maven-
+#     - name: Deploy to uat
+#       run: |
+#         mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+#         -Danypoint.username="${{ secrets.USER }}" \
+#         -Danypoint.password="${{ secrets.PASS }}" \
+#         -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+#         -Denv="${{ secrets.ENV }}" \
+#         -Dappname="${{ secrets.APP_NAME }}" \
+#         -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+#         -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
   
   # deployprod:
   #   needs: deployuat
