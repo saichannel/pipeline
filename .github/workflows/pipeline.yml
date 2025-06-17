@@ -53,6 +53,7 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"client_id":"${{ secrets.ENV_CLIENT_ID }}","client_secret":"${{ secrets.ENV_CLIENT_SECRET }}","grant_type":"client_credentials"}' \
             | jq -r '.access_token')
+
           curl -s -X GET \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "X-ANYPNT-ORG-ID: ${{ secrets.ANYPOINT_ORG_ID }}" \
@@ -115,6 +116,7 @@ jobs:
             -H 'Content-Type: application/json' \
             -d '{"client_id":"${{ secrets.ENV_CLIENT_ID }}","client_secret":"${{ secrets.ENV_CLIENT_SECRET }}","grant_type":"client_credentials"}' \
             | jq -r '.access_token')
+
           curl -s -X GET \
             -H "Authorization: Bearer $ACCESS_TOKEN" \
             -H "X-ANYPNT-ORG-ID: ${{ secrets.ANYPOINT_ORG_ID }}" \
