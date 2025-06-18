@@ -218,17 +218,6 @@ jobs:
           -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
           -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
-      - name: Save deployed version
-        run: |
-          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "$VERSION" > deployed_version.txt
-
-      - name: Upload deployed version artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: dev-version
-          path: deployed_version.txt
-
   deployuat:
     needs: deploydev
     runs-on: ubuntu-latest
@@ -244,28 +233,59 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      - name: Download last dev version artifact
+      - name: Download last UAT version artifact
         uses: actions/download-artifact@v4
         with:
-          name: dev-version
+          name: uat-version
+        continue-on-error: true
 
       - name: Read version from file
         id: read_version
         run: |
-          VERSION=$(cat deployed_version.txt)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [ -f deployed_version.txt ]; then
+            VERSION=$(cat deployed_version.txt)
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=0.0.0" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Simulate UAT Deployment Failure
-        id: uat_deploy
-        continue-on-error: true
+      # UAT Deployment (Real deployment block – succeeds)
+      - name: Deploy to UAT
         run: |
-          echo "Simulating UAT failure..."
-          exit 1
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+          -Danypoint.username="${{ secrets.USER }}" \
+          -Danypoint.password="${{ secrets.PASS }}" \
+          -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+          -Denv="${{ secrets.ENV }}" \
+          -Dappname="${{ secrets.APP_NAME }}" \
+          -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+          -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
-      - name: Rollback to Dev Version
+      # Save successful UAT version
+      - name: Save deployed UAT version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "$VERSION" > deployed_version.txt
+
+      - name: Upload deployed version artifact (UAT)
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-version
+          path: deployed_version.txt
+
+      # # Simulate UAT failure for rollback testing
+      # - name: Simulate UAT Deployment Failure
+      #   id: uat_deploy
+      #   continue-on-error: true
+      #   run: |
+      #     echo "Simulating UAT failure..."
+      #     exit 1
+
+      # Rollback to previous UAT version if simulated deploy fails
+      - name: Rollback to Last Known UAT Version
         if: steps.uat_deploy.outcome == 'failure'
         run: |
-          echo "UAT deployment failed. Rolling back to Dev version: ${{ steps.read_version.outputs.version }}"
+          echo "UAT deployment failed. Rolling back to version: ${{ steps.read_version.outputs.version }}"
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
           -Danypoint.username="${{ secrets.USER }}" \
           -Danypoint.password="${{ secrets.PASS }}" \
