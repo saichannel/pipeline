@@ -158,6 +158,7 @@
 #             -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
 #             -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
+# main code with rollback
 name: Reusable Workflow To Deploy MuleSoft Application
 
 on:
@@ -307,7 +308,7 @@ jobs:
 
 
 
-# ------ main code -----
+# ------ main code ----- without rollback
 # name: Reusable Workflow To Deploy MuleSoft Application
  
 # on:
