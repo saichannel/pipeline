@@ -233,32 +233,32 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      # Download previous UAT version (for rollback)
+      # Download previously deployed UAT version (for rollback)
       - name: Download previous UAT version artifact
         uses: actions/download-artifact@v4
         with:
           name: uat-version
         continue-on-error: true
 
+      # Read previous version and export to env variable
       - name: Read previous version from file
-        id: read_version
         run: |
           if [ -f deployed_version.txt ]; then
             VERSION=$(cat deployed_version.txt)
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "VERSION=$VERSION" >> $GITHUB_ENV
           else
-            echo "version=0.0.0" >> $GITHUB_OUTPUT
+            echo "VERSION=0.0.0" >> $GITHUB_ENV
           fi
 
-      # Deploy new version to UAT
+      # Deploy new version to UAT (simulate failure optionally)
       - name: Try Deploy to UAT
         id: uat_deploy
         continue-on-error: true
         run: |
           echo "Trying to deploy new version to UAT..."
 
-          # Uncomment this to simulate a failure
-          exit 1
+          # Uncomment this to simulate UAT failure and trigger rollback
+          # exit 1
 
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
             -Danypoint.username="${{ secrets.USER }}" \
@@ -269,11 +269,11 @@ jobs:
             -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
             -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
-      # If failed, rollback using PREVIOUS version (not current one)
+      # If UAT deploy fails, rollback using the version saved in artifact
       - name: Rollback to Previous UAT Version
         if: steps.uat_deploy.outcome == 'failure'
         run: |
-          echo "UAT deployment failed. Rolling back to previous version: ${{ steps.read_version.outputs.version }}"
+          echo "UAT deployment failed. Rolling back to previous version: $VERSION"
 
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
             -Danypoint.username="${{ secrets.USER }}" \
@@ -281,11 +281,11 @@ jobs:
             -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
             -Denv="${{ secrets.ENV }}" \
             -Dappname="${{ secrets.APP_NAME }}" \
-            -Dversion="${{ steps.read_version.outputs.version }}" \
+            -Dversion="$VERSION" \
             -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
             -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
-      # Save and upload current version ONLY if new UAT deploy succeeded
+      # Save and upload current version ONLY if new UAT deploy succeeds
       - name: Save current UAT version
         if: steps.uat_deploy.outcome == 'success'
         run: |
@@ -298,6 +298,7 @@ jobs:
         with:
           name: uat-version
           path: deployed_version.txt
+
 
 
 
