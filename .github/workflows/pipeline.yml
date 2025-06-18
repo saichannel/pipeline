@@ -255,18 +255,12 @@ jobs:
           VERSION=$(cat deployed_version.txt)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Try Deploy to UAT
+      - name: Simulate UAT Deployment Failure
         id: uat_deploy
         continue-on-error: true
         run: |
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-          -Danypoint.username="${{ secrets.USER }}" \
-          -Danypoint.password="${{ secrets.PASS }}" \
-          -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-          -Denv="${{ secrets.ENV }}" \
-          -Dappname="${{ secrets.APP_NAME }}" \
-          -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-          -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+          echo "Simulating UAT failure..."
+          exit 1
 
       - name: Rollback to Dev Version
         if: steps.uat_deploy.outcome == 'failure'
@@ -281,6 +275,7 @@ jobs:
           -Dversion="${{ steps.read_version.outputs.version }}" \
           -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
           -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+
 
 
 
