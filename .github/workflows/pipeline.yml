@@ -273,13 +273,13 @@ jobs:
           name: uat-version
           path: deployed_version.txt
 
-      # Simulate UAT failure for rollback testing
-      - name: Simulate UAT Deployment Failure
-        id: uat_deploy
-        continue-on-error: true
-        run: |
-          echo "Simulating UAT failure..."
-          exit 1
+      # # Simulate UAT failure for rollback testing
+      # - name: Simulate UAT Deployment Failure
+      #   id: uat_deploy
+      #   continue-on-error: true
+      #   run: |
+      #     echo "Simulating UAT failure..."
+      #     exit 1
 
       # Rollback to previous UAT version if simulated deploy fails
       - name: Rollback to Last Known UAT Version
