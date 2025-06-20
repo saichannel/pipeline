@@ -259,7 +259,7 @@ jobs:
           echo "Trying to deploy new version to UAT..."
 
           # Uncomment this to simulate UAT failure and trigger rollback
-          # exit 1
+          exit 1
 
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
             -Danypoint.username="${{ secrets.USER }}" \
