@@ -164,8 +164,6 @@ name: Reusable Workflow To Deploy MuleSoft Application
 on:
   workflow_call:
   workflow_dispatch:
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -208,8 +206,8 @@ jobs:
       - name: Publish to Exchange
         run: |
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests \
-          -Danypoint.username="${{ secrets.USER }}" \
-          -Danypoint.password="${{ secrets.PASS }}"
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}"
 
   deploydev:
     needs: build
@@ -235,13 +233,13 @@ jobs:
       - name: Deploy to Dev
         run: |
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-          -Danypoint.username="${{ secrets.USER }}" \
-          -Danypoint.password="${{ secrets.PASS }}" \
-          -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-          -Denv="${{ secrets.ENV }}" \
-          -Dappname="${{ secrets.APP_NAME }}" \
-          -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-          -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}" \
+            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+            -Denv="${{ secrets.ENV }}" \
+            -Dappname="${{ secrets.APP_NAME }}" \
+            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
   deployuat:
     needs: deploydev
@@ -277,31 +275,21 @@ jobs:
             -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
             -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
-      - name: Save rollback JAR and push to rollback-artifacts branch
+      - name: Save rollback JAR for UAT
         if: steps.uat_deploy.outcome == 'success'
         run: |
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          mkdir -p tmp-rollback-jars/$VERSION
-          cp target/*.jar tmp-rollback-jars/$VERSION/
-          echo "$VERSION" > tmp-rollback-jars/$VERSION/version.txt
-      
-          # Configure Git
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-      
-          # Clone rollback-artifacts branch into a temp directory
-          git fetch origin rollback-artifacts
-          git worktree add rollback-work rollback-artifacts
-      
-          # Copy rollback JAR to worktree
-          mkdir -p rollback-work/rollback-jars/$VERSION
-          cp tmp-rollback-jars/$VERSION/* rollback-work/rollback-jars/$VERSION/
-      
-          # Commit and push
-          cd rollback-work
-          git add rollback-jars/$VERSION
-          git commit -m "Add rollback artifact for version $VERSION"
-          git push origin rollback-artifacts
+          mkdir -p rollback-uat/$VERSION
+          cp target/*.jar rollback-uat/$VERSION/
+          echo "version=$VERSION" > rollback-uat/$VERSION/info.txt
+
+      - name: Upload rollback artifact
+        if: steps.uat_deploy.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollback-uat-${{ github.run_id }}
+          path: rollback-uat/
+          retention-days: 30
 
 
 
