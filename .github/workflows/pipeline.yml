@@ -163,7 +163,7 @@ name: Reusable Workflow To Deploy MuleSoft Application
 
 on:
   workflow_call:
-  workflow_dispatch:  # Enables manual rollback trigger
+  workflow_dispatch:  # for manual rollback
 
 jobs:
   build:
@@ -224,6 +224,12 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
+      - name: Download JAR from build
+        uses: actions/download-artifact@v4
+        with:
+          name: application-jar
+          path: target/
+
       - name: Deploy to Dev
         run: |
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
@@ -250,29 +256,16 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      - name: Download previous UAT artifact
+      - name: Download JAR from build
         uses: actions/download-artifact@v4
         with:
-          name: rollback-jar
+          name: application-jar
           path: target/
-        continue-on-error: true
 
-      - name: Save previous version
-        if: success() || failure()
-        run: |
-          if [ -f target/*.jar ]; then
-            OLD_VERSION=$(ls target/*.jar | grep -oP '(?<=-)[0-9]+\.[0-9]+\.[0-9]+(?=\.jar)')
-            echo "PREV_VERSION=$OLD_VERSION" >> $GITHUB_ENV
-          else
-            echo "PREV_VERSION=0.0.0" >> $GITHUB_ENV
-          fi
-
-      - name: Try Deploy to UAT
+      - name: Deploy to UAT
         id: uat_deploy
         continue-on-error: true
         run: |
-          gh run download $GITHUB_RUN_ID -n application-jar -D target/
-          
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
             -Danypoint.username="${{ secrets.USER }}" \
             -Danypoint.password="${{ secrets.PASS }}" \
@@ -282,41 +275,24 @@ jobs:
             -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
             -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
-      - name: Rollback to Previous UAT Version
-        if: steps.uat_deploy.outcome == 'failure'
-        run: |
-          echo "UAT deployment failed. Rolling back to version: ${{ env.PREV_VERSION }}"
-          
-          if [ ! -f target/*.jar ]; then
-            echo "Downloading rollback artifact..."
-            gh run download $GITHUB_RUN_ID -n rollback-jar -D target/ || true
-          fi
-          
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-            -Danypoint.username="${{ secrets.USER }}" \
-            -Danypoint.password="${{ secrets.PASS }}" \
-            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-            -Denv="${{ secrets.ENV }}" \
-            -Dappname="${{ secrets.APP_NAME }}" \
-            -Dversion="${{ env.PREV_VERSION }}" \
-            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
-
-      - name: Save UAT artifact for rollback
+      - name: Save rollback JAR for UAT
         if: steps.uat_deploy.outcome == 'success'
         run: |
-          CURRENT_VERSION=${{ needs.build.outputs.jar_version }}
-          echo "Saving version $CURRENT_VERSION for rollback"
-          mkdir -p rollback-artifact
-          cp target/*.jar rollback-artifact/
+          mkdir -p rollback-uat
+          cp target/*.jar rollback-uat/
 
       - name: Upload rollback artifact
         if: steps.uat_deploy.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: rollback-jar
-          path: rollback-artifact/*.jar
+          name: rollback-uat
+          path: rollback-uat/*.jar
           retention-days: 7
+
+      - name: Rollback on failure
+        if: steps.uat_deploy.outcome == 'failure'
+        run: |
+          echo "Deployment failed — manual rollback required or promote a previous version."
 
   rollbackuat:
     if: github.event_name == 'workflow_dispatch'
@@ -326,21 +302,20 @@ jobs:
       - name: Checkout this repo
         uses: actions/checkout@v4
 
-      - name: Download rollback artifact
+      - name: Download rollback JAR
         uses: actions/download-artifact@v4
         with:
-          name: rollback-jar
+          name: rollback-uat
           path: target/
 
-      - name: Extract rollback version from JAR filename
+      - name: Extract version from rollback JAR
         id: extract_version
         run: |
           FILE=$(ls target/*.jar | head -n 1)
           VERSION=$(basename "$FILE" | grep -oP '(?<=-)[0-9]+\.[0-9]+\.[0-9]+(?=\.jar)')
-          echo "Rollback version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Rollback to previous version in UAT
+      - name: Rollback to previous UAT version
         run: |
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
             -Danypoint.username="${{ secrets.USER }}" \
