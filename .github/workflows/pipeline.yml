@@ -163,16 +163,15 @@ name: Reusable Workflow To Deploy MuleSoft Application
 
 on:
   workflow_call:
-  workflow_dispatch:
+  workflow_dispatch:  # Allows manual trigger for testing
 
 jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
       jar_version: ${{ steps.set_version.outputs.jar_version }}
-      jar_name: ${{ steps.set_version.outputs.jar_name }}
     steps:
-      - name: Checkout repo
+      - name: Checkout this repo
         uses: actions/checkout@v4
 
       - name: Cache dependencies
@@ -188,35 +187,27 @@ jobs:
           distribution: "zulu"
           java-version: 17
 
-      - name: Build with Maven
-        run: |
-          # Build without install/deploy first
-          mvn clean package -DmuleDeploy -DskipMunitTests
+      - name: Build JAR
+        run: mvn clean package -DmuleDeploy
 
-      - name: Get JAR info
+      - name: Get JAR version
         id: set_version
         run: |
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          JAR_NAME=$(ls target/*.jar | head -1 | xargs basename)
           echo "jar_version=$VERSION" >> $GITHUB_OUTPUT
-          echo "jar_name=$JAR_NAME" >> $GITHUB_OUTPUT
-          echo "JAR_NAME=$JAR_NAME" >> $GITHUB_ENV
+
+      - name: Archive JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-jar
+          path: target/*.jar
+          retention-days: 7
 
       - name: Publish to Exchange
         run: |
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs \
-            -DskipMunitTests \
-            -Danypoint.username="${{ secrets.USER }}" \
-            -Danypoint.password="${{ secrets.PASS }}"
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: mulesoft-artifacts
-          path: |
-            target/*.jar
-            pom.xml
-          retention-days: 30
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests \
+          -Danypoint.username="${{ secrets.USER }}" \
+          -Danypoint.password="${{ secrets.PASS }}"
 
   deploydev:
     needs: build
@@ -232,6 +223,12 @@ jobs:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
+
+      - name: Download JAR from build
+        uses: actions/download-artifact@v4
+        with:
+          name: application-jar
+          path: target/
 
       - name: Deploy to Dev
         run: |
@@ -249,11 +246,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: uat
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: mulesoft-artifacts
-          path: .
+      - name: Checkout this repo
+        uses: actions/checkout@v4
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -262,34 +256,17 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Download JAR from build
+        uses: actions/download-artifact@v4
         with:
-          distribution: "zulu"
-          java-version: 17
-
-      - name: Store deployment info
-        id: deployment_info
-        run: |
-          # Extract JAR name from downloaded artifacts
-          JAR_NAME=$(ls target/*.jar | head -1 | xargs basename)
-          VERSION=$(echo $JAR_NAME | grep -oP '\d+\.\d+\.\d+')
-  
-          echo "JAR_NAME=$JAR_NAME" >> $GITHUB_ENV
-          echo "DEPLOY_VERSION=$VERSION" >> $GITHUB_ENV
-          echo "$(date +%s),$VERSION" >> deployment-history.csv
-          echo "Deploying version: $VERSION"
-
-      - name: Save deployment history
-        uses: actions/upload-artifact@v4
-        with:
-          name: deployment-history
-          path: deployment-history.csv
-          retention-days: 90
+          name: application-jar
+          path: target/
 
       - name: Deploy to UAT
+        id: uat_deploy
+        continue-on-error: true
         run: |
-          mvn deploy -DskipMunitTests -DmuleDeploy \
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
             -Danypoint.username="${{ secrets.USER }}" \
             -Danypoint.password="${{ secrets.PASS }}" \
             -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
@@ -298,13 +275,68 @@ jobs:
             -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
             -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
-      - name: Save rollback artifact
-        if: success()
+      - name: Save rollback JAR for UAT
+        if: steps.uat_deploy.outcome == 'success'
+        run: |
+          mkdir -p rollback-uat
+          cp target/*.jar rollback-uat/
+
+      - name: Upload rollback artifact
+        if: steps.uat_deploy.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: rollback-${{ env.DEPLOY_VERSION }}
-          path: target/${{ env.JAR_NAME }}
-          retention-days: 30
+          name: rollback-uat
+          path: rollback-uat/*.jar
+          retention-days: 7
+
+this is my main.yml
+
+name: Manual Rollback to UAT
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_rollback:
+        description: 'Confirm rollback to the last successful UAT version? (yes)'
+        required: true
+        default: 'no'
+
+jobs:
+  rollback-uat:
+    if: github.event.inputs.confirm_rollback == 'yes'
+    runs-on: ubuntu-latest
+    environment: uat
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download rollback artifact from UAT
+        uses: actions/download-artifact@v4
+        with:
+          name: rollback-uat
+          path: target/
+
+      - name: Extract version from rollback JAR
+        id: extract_version
+        run: |
+          FILE=$(ls target/*.jar | head -n 1)
+          VERSION=$(basename "$FILE" | grep -oP '(?<=-)[0-9]+\.[0-9]+\.[0-9]+(?=\.jar)')
+          echo "Rollback version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Redeploy rollback JAR to UAT
+        run: |
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}" \
+            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+            -Denv="${{ secrets.ENV }}" \
+            -Dappname="${{ secrets.APP_NAME }}" \
+            -Dversion="${{ steps.extract_version.outputs.version }}" \
+            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+
 
 
   
