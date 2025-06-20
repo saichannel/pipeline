@@ -163,15 +163,16 @@ name: Reusable Workflow To Deploy MuleSoft Application
 
 on:
   workflow_call:
-  workflow_dispatch:  # Allows manual trigger for testing
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     outputs:
       jar_version: ${{ steps.set_version.outputs.jar_version }}
+      jar_name: ${{ steps.set_version.outputs.jar_name }}  # Added JAR name output
     steps:
-      - name: Checkout this repo
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Cache dependencies
@@ -187,86 +188,47 @@ jobs:
           distribution: "zulu"
           java-version: 17
 
-      - name: Build JAR
-        run: mvn clean package -DmuleDeploy
+      - name: Build and publish
+        run: |
+          mvn clean package deploy \
+            --settings .settings/org.eclipse.core.resources.prefs \
+            -DmuleDeploy -DskipMunitTests \
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}"
 
-      - name: Get JAR version
+      - name: Get JAR info
         id: set_version
         run: |
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          JAR_NAME=$(ls target/*.jar | xargs -n1 basename)
           echo "jar_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "jar_name=$JAR_NAME" >> $GITHUB_OUTPUT
+          echo "JAR_NAME=$JAR_NAME" >> $GITHUB_ENV  # Also set as environment variable
 
-      - name: Archive JAR artifact
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: application-jar
-          path: target/*.jar
-          retention-days: 7
-
-      - name: Publish to Exchange
-        run: |
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests \
-          -Danypoint.username="${{ secrets.USER }}" \
-          -Danypoint.password="${{ secrets.PASS }}"
+          name: mulesoft-artifacts
+          path: |
+            target/*.jar
+            pom.xml
+          retention-days: 30
 
   deploydev:
     needs: build
     runs-on: ubuntu-latest
     environment: dev
     steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-maven-
-
-      - name: Download JAR from build
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: application-jar
-          path: target/
+          name: mulesoft-artifacts
+          path: .
 
       - name: Deploy to Dev
         run: |
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-          -Danypoint.username="${{ secrets.USER }}" \
-          -Danypoint.password="${{ secrets.PASS }}" \
-          -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-          -Denv="${{ secrets.ENV }}" \
-          -Dappname="${{ secrets.APP_NAME }}" \
-          -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-          -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
-
-  deployuat:
-    needs: deploydev
-    runs-on: ubuntu-latest
-    environment: uat
-    steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-maven-
-
-      - name: Download JAR from build
-        uses: actions/download-artifact@v4
-        with:
-          name: application-jar
-          path: target/
-
-      - name: Deploy to UAT
-        id: uat_deploy
-        continue-on-error: true
-        run: |
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs \
+            -DskipMunitTests -DmuleDeploy \
             -Danypoint.username="${{ secrets.USER }}" \
             -Danypoint.password="${{ secrets.PASS }}" \
             -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
@@ -275,19 +237,50 @@ jobs:
             -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
             -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
-      - name: Save rollback JAR for UAT
-        if: steps.uat_deploy.outcome == 'success'
-        run: |
-          mkdir -p rollback-uat
-          cp target/*.jar rollback-uat/
+  deployuat:
+    needs: deploydev
+    runs-on: ubuntu-latest
+    environment: uat
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: mulesoft-artifacts
+          path: .
 
-      - name: Upload rollback artifact
-        if: steps.uat_deploy.outcome == 'success'
+      - name: Store deployment info
+        id: deployment_info
+        run: |
+          echo "JAR_NAME=${{ needs.build.outputs.jar_name }}" >> $GITHUB_ENV
+          echo "DEPLOY_VERSION=${{ needs.build.outputs.jar_version }}" >> $GITHUB_ENV
+          echo "$(date +%s),${{ needs.build.outputs.jar_version }}" >> deployment-history.csv
+
+      - name: Save deployment history
         uses: actions/upload-artifact@v4
         with:
-          name: rollback-uat
-          path: rollback-uat/*.jar
-          retention-days: 7
+          name: deployment-history
+          path: deployment-history.csv
+          retention-days: 90
+
+      - name: Deploy to UAT
+        run: |
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs \
+            -DskipMunitTests -DmuleDeploy \
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}" \
+            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+            -Denv="${{ secrets.ENV }}" \
+            -Dappname="${{ secrets.APP_NAME }}" \
+            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+
+      - name: Save rollback artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollback-${{ needs.build.outputs.jar_version }}
+          path: target/${{ env.JAR_NAME }}
+          retention-days: 30
 
 
 
