@@ -159,178 +159,178 @@
 #             -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
 # # main code with rollback
-name: Reusable Workflow To Deploy MuleSoft Application
+# name: Reusable Workflow To Deploy MuleSoft Application
 
-on:
-  workflow_call:
+# on:
+#   workflow_call:
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    outputs:
-      jar_version: ${{ steps.set_version.outputs.jar_version }}
-    steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     outputs:
+#       jar_version: ${{ steps.set_version.outputs.jar_version }}
+#     steps:
+#       - name: Checkout this repo
+#         uses: actions/checkout@v4
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-maven-
+#       - name: Cache dependencies
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.m2/repository
+#           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+#           restore-keys: ${{ runner.os }}-maven-
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: "zulu"
-          java-version: 17
+#       - name: Set up JDK 17
+#         uses: actions/setup-java@v4
+#         with:
+#           distribution: "zulu"
+#           java-version: 17
 
-      - name: Build JAR
-        run: mvn clean package -DmuleDeploy
+#       - name: Build JAR
+#         run: mvn clean package -DmuleDeploy
 
-      - name: Get JAR version
-        id: set_version
-        run: |
-          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          echo "jar_version=$VERSION" >> $GITHUB_OUTPUT
+#       - name: Get JAR version
+#         id: set_version
+#         run: |
+#           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+#           echo "jar_version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Archive JAR artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: application-jar
-          path: target/*.jar
-          retention-days: 7
+#       - name: Archive JAR artifact
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: application-jar
+#           path: target/*.jar
+#           retention-days: 7
 
-      - name: Publish to Exchange
-        run: |
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests \
-          -Danypoint.username="${{ secrets.USER }}" \
-          -Danypoint.password="${{ secrets.PASS }}"
+#       - name: Publish to Exchange
+#         run: |
+#           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests \
+#           -Danypoint.username="${{ secrets.USER }}" \
+#           -Danypoint.password="${{ secrets.PASS }}"
 
-  deploydev:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: dev
-    steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
+#   deploydev:
+#     needs: build
+#     runs-on: ubuntu-latest
+#     environment: dev
+#     steps:
+#       - name: Checkout this repo
+#         uses: actions/checkout@v4
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-maven-
+#       - name: Cache dependencies
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.m2/repository
+#           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+#           restore-keys: ${{ runner.os }}-maven-
 
-      - name: Deploy to Dev
-        run: |
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-          -Danypoint.username="${{ secrets.USER }}" \
-          -Danypoint.password="${{ secrets.PASS }}" \
-          -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-          -Denv="${{ secrets.ENV }}" \
-          -Dappname="${{ secrets.APP_NAME }}" \
-          -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-          -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+#       - name: Deploy to Dev
+#         run: |
+#           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+#           -Danypoint.username="${{ secrets.USER }}" \
+#           -Danypoint.password="${{ secrets.PASS }}" \
+#           -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+#           -Denv="${{ secrets.ENV }}" \
+#           -Dappname="${{ secrets.APP_NAME }}" \
+#           -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+#           -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
-  deployuat:
-    needs: deploydev
-    runs-on: ubuntu-latest
-    environment: uat
-    steps:
-      - name: Checkout this repo
-        uses: actions/checkout@v4
+#   deployuat:
+#     needs: deploydev
+#     runs-on: ubuntu-latest
+#     environment: uat
+#     steps:
+#       - name: Checkout this repo
+#         uses: actions/checkout@v4
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-maven-
+#       - name: Cache dependencies
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.m2/repository
+#           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+#           restore-keys: ${{ runner.os }}-maven-
 
-      # Download previous UAT JAR artifact
-      - name: Download previous UAT artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: rollback-jar
-          path: target/
-        continue-on-error: true
+#       # Download previous UAT JAR artifact
+#       - name: Download previous UAT artifact
+#         uses: actions/download-artifact@v4
+#         with:
+#           name: rollback-jar
+#           path: target/
+#         continue-on-error: true
 
-      # Save previous version name
-      - name: Save previous version
-        if: success() || failure()
-        run: |
-          if [ -f target/*.jar ]; then
-            # Extract version from JAR filename
-            OLD_VERSION=$(ls target/*.jar | grep -oP '(?<=-)[0-9]+\.[0-9]+\.[0-9]+(?=\.jar)')
-            echo "PREV_VERSION=$OLD_VERSION" >> $GITHUB_ENV
-          else
-            echo "PREV_VERSION=0.0.0" >> $GITHUB_ENV
-          fi
+#       # Save previous version name
+#       - name: Save previous version
+#         if: success() || failure()
+#         run: |
+#           if [ -f target/*.jar ]; then
+#             # Extract version from JAR filename
+#             OLD_VERSION=$(ls target/*.jar | grep -oP '(?<=-)[0-9]+\.[0-9]+\.[0-9]+(?=\.jar)')
+#             echo "PREV_VERSION=$OLD_VERSION" >> $GITHUB_ENV
+#           else
+#             echo "PREV_VERSION=0.0.0" >> $GITHUB_ENV
+#           fi
 
-      # Deploy new version to UAT
-      - name: Try Deploy to UAT
-        id: uat_deploy
-        continue-on-error: true
-        run: |
-          # ---- Uncomment this line below to simulate deployment failure and test rollback ----
-          # exit 1
+#       # Deploy new version to UAT
+#       - name: Try Deploy to UAT
+#         id: uat_deploy
+#         continue-on-error: true
+#         run: |
+#           # ---- Uncomment this line below to simulate deployment failure and test rollback ----
+#           # exit 1
 
-          # Download current JAR from build job
-          gh run download $GITHUB_RUN_ID -n application-jar -D target/
+#           # Download current JAR from build job
+#           gh run download $GITHUB_RUN_ID -n application-jar -D target/
           
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-            -Danypoint.username="${{ secrets.USER }}" \
-            -Danypoint.password="${{ secrets.PASS }}" \
-            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-            -Denv="${{ secrets.ENV }}" \
-            -Dappname="${{ secrets.APP_NAME }}" \
-            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+#           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+#             -Danypoint.username="${{ secrets.USER }}" \
+#             -Danypoint.password="${{ secrets.PASS }}" \
+#             -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+#             -Denv="${{ secrets.ENV }}" \
+#             -Dappname="${{ secrets.APP_NAME }}" \
+#             -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+#             -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
 
-      # Rollback to previous version if needed
-      - name: Rollback to Previous UAT Version
-        if: steps.uat_deploy.outcome == 'failure'
-        run: |
-          echo "UAT deployment failed. Rolling back to version: ${{ env.PREV_VERSION }}"
+#       # Rollback to previous version if needed
+#       - name: Rollback to Previous UAT Version
+#         if: steps.uat_deploy.outcome == 'failure'
+#         run: |
+#           echo "UAT deployment failed. Rolling back to version: ${{ env.PREV_VERSION }}"
           
-          # Ensure we have the rollback JAR
-          if [ ! -f target/*.jar ]; then
-            echo "Downloading rollback artifact..."
-            gh run download $GITHUB_RUN_ID -n rollback-jar -D target/ || true
-          fi
+#           # Ensure we have the rollback JAR
+#           if [ ! -f target/*.jar ]; then
+#             echo "Downloading rollback artifact..."
+#             gh run download $GITHUB_RUN_ID -n rollback-jar -D target/ || true
+#           fi
           
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-            -Danypoint.username="${{ secrets.USER }}" \
-            -Danypoint.password="${{ secrets.PASS }}" \
-            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-            -Denv="${{ secrets.ENV }}" \
-            -Dappname="${{ secrets.APP_NAME }}" \
-            -Dversion="${{ env.PREV_VERSION }}" \
-            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+#           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+#             -Danypoint.username="${{ secrets.USER }}" \
+#             -Danypoint.password="${{ secrets.PASS }}" \
+#             -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+#             -Denv="${{ secrets.ENV }}" \
+#             -Dappname="${{ secrets.APP_NAME }}" \
+#             -Dversion="${{ env.PREV_VERSION }}" \
+#             -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+#             -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
-      # Save successful deployment artifact for future rollback
-      - name: Save UAT artifact for rollback
-        if: steps.uat_deploy.outcome == 'success'
-        run: |
-          # Get current JAR version
-          CURRENT_VERSION=${{ needs.build.outputs.jar_version }}
-          echo "Saving version $CURRENT_VERSION for rollback"
+#       # Save successful deployment artifact for future rollback
+#       - name: Save UAT artifact for rollback
+#         if: steps.uat_deploy.outcome == 'success'
+#         run: |
+#           # Get current JAR version
+#           CURRENT_VERSION=${{ needs.build.outputs.jar_version }}
+#           echo "Saving version $CURRENT_VERSION for rollback"
           
-          # Prepare rollback artifact
-          mkdir -p rollback-artifact
-          cp target/*.jar rollback-artifact/
+#           # Prepare rollback artifact
+#           mkdir -p rollback-artifact
+#           cp target/*.jar rollback-artifact/
           
-      - name: Upload rollback artifact
-        if: steps.uat_deploy.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: rollback-jar
-          path: rollback-artifact/*.jar
-          retention-days: 7
+#       - name: Upload rollback artifact
+#         if: steps.uat_deploy.outcome == 'success'
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: rollback-jar
+#           path: rollback-artifact/*.jar
+#           retention-days: 7
 
 # name: Reusable Workflow To Deploy MuleSoft Application
  
@@ -651,4 +651,435 @@ jobs:
 #             -Danypoint.platform.client_id="${{ secrets.PROD_CLIENT_ID }}" \
 #             -Danypoint.platform.client_secret="${{ secrets.PROD_CLIENT_SECRET }}"
 
+
+# latest
+name: Reusable Workflow To Deploy MuleSoft Application
+
+on:
+  workflow_call:
+    inputs:
+      rollback_version:
+        description: 'Version to rollback to (leave empty for normal deployment)'
+        required: false
+        type: string
+      target_environment:
+        description: 'Target environment for rollback'
+        required: false
+        type: string
+        default: 'uat'
+
+env:
+  MAVEN_OPTS: -Dmaven.repo.local=~/.m2/repository
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.rollback_version }}
+    outputs:
+      jar_version: ${{ steps.set_version.outputs.jar_version }}
+      jar_filename: ${{ steps.set_version.outputs.jar_filename }}
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: "zulu"
+          java-version: 17
+
+      - name: Build JAR
+        run: mvn clean package -DmuleDeploy
+
+      - name: Get JAR version and filename
+        id: set_version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          ARTIFACT_ID=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)
+          JAR_FILENAME="${ARTIFACT_ID}-${VERSION}.jar"
+          echo "jar_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "jar_filename=$JAR_FILENAME" >> $GITHUB_OUTPUT
+          echo "Built JAR: $JAR_FILENAME (version: $VERSION)"
+
+      - name: Verify JAR exists
+        run: |
+          if [ ! -f "target/${{ steps.set_version.outputs.jar_filename }}" ]; then
+            echo "Expected JAR file not found: target/${{ steps.set_version.outputs.jar_filename }}"
+            ls -la target/
+            exit 1
+          fi
+
+      - name: Archive JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: application-jar-${{ steps.set_version.outputs.jar_version }}
+          path: target/${{ steps.set_version.outputs.jar_filename }}
+          retention-days: 7
+
+      - name: Publish to Exchange
+        run: |
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests \
+          -Danypoint.username="${{ secrets.USER }}" \
+          -Danypoint.password="${{ secrets.PASS }}"
+
+  deploydev:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.rollback_version }}
+    environment: dev
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: application-jar-${{ needs.build.outputs.jar_version }}
+          path: target/
+
+      - name: Deploy to Dev
+        run: |
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+          -Danypoint.username="${{ secrets.USER }}" \
+          -Danypoint.password="${{ secrets.PASS }}" \
+          -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+          -Denv="${{ secrets.ENV }}" \
+          -Dappname="${{ secrets.APP_NAME }}" \
+          -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+          -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+
+      - name: Record Dev deployment
+        id: record_dev
+        run: |
+          # Create deployment record
+          echo "{
+            \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+            \"version\": \"${{ needs.build.outputs.jar_version }}\",
+            \"commit\": \"${{ github.sha }}\",
+            \"environment\": \"dev\",
+            \"actor\": \"${{ github.actor }}\",
+            \"run_id\": \"${{ github.run_id }}\",
+            \"status\": \"success\"
+          }" > deployment-record-dev.json
+          
+          echo "DEPLOYMENT_RECORD<<EOF" >> $GITHUB_ENV
+          cat deployment-record-dev.json >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Upload Dev deployment record
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-record-dev-${{ github.run_id }}
+          path: deployment-record-dev.json
+
+  deployuat:
+    needs: [build, deploydev]
+    runs-on: ubuntu-latest
+    if: ${{ always() && (needs.deploydev.result == 'success' || inputs.rollback_version) }}
+    environment: uat
+    outputs:
+      deployment_status: ${{ steps.uat_deploy.outcome }}
+      deployed_version: ${{ steps.get_version.outputs.current_version }}
+    steps:
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      # Get deployment history
+      - name: Get deployment history
+        run: |
+          # Try to checkout deployment history branch
+          git checkout deployment-history 2>/dev/null || {
+            git checkout -b deployment-history
+            echo "[]" > deployment-history.json
+            git add deployment-history.json
+            git commit -m "Initialize deployment history"
+            git push origin deployment-history
+          }
+          
+          # Ensure deployment history file exists
+          if [ ! -f deployment-history.json ]; then
+            echo "[]" > deployment-history.json
+          fi
+
+      # Determine version to deploy (new or rollback)
+      - name: Determine deployment version
+        id: get_version
+        run: |
+          if [ -n "${{ inputs.rollback_version }}" ]; then
+            # Rollback scenario
+            DEPLOY_VERSION="${{ inputs.rollback_version }}"
+            DEPLOYMENT_TYPE="rollback"
+            echo "Performing rollback to version: $DEPLOY_VERSION"
+            
+            # Verify rollback version exists in history
+            if ! jq -e ".[] | select(.version == \"$DEPLOY_VERSION\" and .environment == \"uat\" and .status == \"success\")" deployment-history.json > /dev/null; then
+              echo "Error: Version $DEPLOY_VERSION not found in successful UAT deployments"
+              exit 1
+            fi
+          else
+            # Normal deployment
+            DEPLOY_VERSION="${{ needs.build.outputs.jar_version }}"
+            DEPLOYMENT_TYPE="deployment"
+            echo "Performing normal deployment of version: $DEPLOY_VERSION"
+          fi
+          
+          echo "current_version=$DEPLOY_VERSION" >> $GITHUB_OUTPUT
+          echo "deployment_type=$DEPLOYMENT_TYPE" >> $GITHUB_OUTPUT
+
+      # Get previous successful version for potential rollback
+      - name: Get previous UAT version
+        id: get_prev_version
+        run: |
+          # Get the last successful UAT deployment (excluding current version if it exists)
+          PREV_VERSION=$(jq -r '.[] | select(.environment == "uat" and .status == "success" and .version != "${{ steps.get_version.outputs.current_version }}") | .version' deployment-history.json | tail -1)
+          
+          if [ "$PREV_VERSION" == "null" ] || [ -z "$PREV_VERSION" ]; then
+            PREV_VERSION="none"
+          fi
+          
+          echo "previous_version=$PREV_VERSION" >> $GITHUB_OUTPUT
+          echo "Previous successful UAT version: $PREV_VERSION"
+
+      # Download appropriate JAR
+      - name: Download JAR artifact
+        run: |
+          if [ "${{ steps.get_version.outputs.deployment_type }}" == "rollback" ]; then
+            # For rollback, try to download the specific version artifact
+            echo "Downloading artifact for rollback version: ${{ steps.get_version.outputs.current_version }}"
+            gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+            
+            # Try to find and download the artifact
+            ARTIFACT_FOUND=false
+            for run_id in $(gh run list --limit 50 --json databaseId --jq '.[].databaseId'); do
+              if gh run download $run_id --name "uat-deployed-${{ steps.get_version.outputs.current_version }}" --dir target/ 2>/dev/null; then
+                ARTIFACT_FOUND=true
+                echo "Found and downloaded rollback artifact from run $run_id"
+                break
+              fi
+            done
+            
+            if [ "$ARTIFACT_FOUND" = false ]; then
+              echo "Error: Could not find artifact for rollback version ${{ steps.get_version.outputs.current_version }}"
+              exit 1
+            fi
+          else
+            # Normal deployment - download from build job
+            echo "Downloading current build artifact"
+            gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+            gh run download ${{ github.run_id }} --name "application-jar-${{ steps.get_version.outputs.current_version }}" --dir target/
+          fi
+
+      # Deploy to UAT
+      - name: Deploy to UAT
+        id: uat_deploy
+        run: |
+          echo "Deploying version ${{ steps.get_version.outputs.current_version }} to UAT..."
+          echo "Deployment type: ${{ steps.get_version.outputs.deployment_type }}"
+          
+          # ---- Uncomment this line below to simulate deployment failure and test rollback ----
+          # exit 1
+          
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}" \
+            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+            -Denv="${{ secrets.ENV }}" \
+            -Dappname="${{ secrets.APP_NAME }}" \
+            $([ "${{ steps.get_version.outputs.deployment_type }}" == "rollback" ] && echo "-Dversion=${{ steps.get_version.outputs.current_version }}") \
+            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+
+      # Handle deployment failure with automatic rollback
+      - name: Handle deployment failure
+        if: failure() && steps.get_prev_version.outputs.previous_version != 'none' && steps.get_version.outputs.deployment_type != 'rollback'
+        run: |
+          echo "Deployment failed. Attempting automatic rollback to version: ${{ steps.get_prev_version.outputs.previous_version }}"
+          
+          # Download the previous successful version artifact
+          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+          
+          ARTIFACT_FOUND=false
+          for run_id in $(gh run list --limit 50 --json databaseId --jq '.[].databaseId'); do
+            if gh run download $run_id --name "uat-deployed-${{ steps.get_prev_version.outputs.previous_version }}" --dir target/ 2>/dev/null; then
+              ARTIFACT_FOUND=true
+              echo "Found and downloaded rollback artifact from run $run_id"
+              break
+            fi
+          done
+          
+          if [ "$ARTIFACT_FOUND" = true ]; then
+            # Deploy the previous version
+            mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+              -Danypoint.username="${{ secrets.USER }}" \
+              -Danypoint.password="${{ secrets.PASS }}" \
+              -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+              -Denv="${{ secrets.ENV }}" \
+              -Dappname="${{ secrets.APP_NAME }}" \
+              -Dversion="${{ steps.get_prev_version.outputs.previous_version }}" \
+              -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+              -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+            
+            echo "Automatic rollback completed to version: ${{ steps.get_prev_version.outputs.previous_version }}"
+          else
+            echo "Could not find artifact for rollback version ${{ steps.get_prev_version.outputs.previous_version }}"
+            exit 1
+          fi
+
+      # Save successful deployment artifact
+      - name: Save UAT deployment artifact
+        if: success() && steps.get_version.outputs.deployment_type != 'rollback'
+        uses: actions/upload-artifact@v4
+        with:
+          name: uat-deployed-${{ steps.get_version.outputs.current_version }}
+          path: target/
+          retention-days: 90
+
+      # Record deployment in history
+      - name: Record deployment
+        if: always()
+        run: |
+          # Determine deployment status
+          if [ "${{ steps.uat_deploy.outcome }}" == "success" ]; then
+            STATUS="success"
+          else
+            STATUS="failed"
+          fi
+          
+          # Create deployment record
+          echo "{
+            \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",
+            \"version\": \"${{ steps.get_version.outputs.current_version }}\",
+            \"commit\": \"${{ github.sha }}\",
+            \"environment\": \"uat\",
+            \"actor\": \"${{ github.actor }}\",
+            \"run_id\": \"${{ github.run_id }}\",
+            \"status\": \"$STATUS\",
+            \"deployment_type\": \"${{ steps.get_version.outputs.deployment_type }}\"
+          }" > deployment-record-uat.json
+          
+          echo "DEPLOYMENT_RECORD<<EOF" >> $GITHUB_ENV
+          cat deployment-record-uat.json >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Upload UAT deployment record
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-record-uat-${{ github.run_id }}
+          path: deployment-record-uat.json
+
+      - name: Update deployment history
+        if: always()
+        run: |
+          # Switch back to deployment history branch
+          git checkout deployment-history
+          
+          # Add new deployment record to history
+          jq ". += [$(cat deployment-record-uat.json)]" deployment-history.json > temp.json
+          mv temp.json deployment-history.json
+          
+          # Keep only last 100 records to prevent file from growing too large
+          jq 'sort_by(.timestamp) | .[-100:]' deployment-history.json > temp.json
+          mv temp.json deployment-history.json
+          
+          # Commit the updated history
+          git add deployment-history.json
+          git commit -m "Record UAT deployment: ${{ steps.get_version.outputs.current_version }} (${{ steps.get_version.outputs.deployment_type }})"
+          git push origin deployment-history
+
+      # Clean up old artifacts
+      - name: Cleanup old artifacts
+        if: success()
+        run: |
+          gh auth login --with-token <<< "${{ secrets.GITHUB_TOKEN }}"
+          
+          # Keep only the last 10 UAT deployment artifacts
+          gh api repos/${{ github.repository }}/actions/artifacts \
+            --jq '.artifacts[] | select(.name | startswith("uat-deployed-")) | .id' \
+            | sort -rn | tail -n +11 | while read artifact_id; do
+              echo "Deleting old artifact: $artifact_id"
+              gh api --method DELETE repos/${{ github.repository }}/actions/artifacts/$artifact_id || true
+            done
+
+  notify:
+    needs: [build, deploydev, deployuat]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Notify deployment status
+        run: |
+          if [ -n "${{ inputs.rollback_version }}" ]; then
+            # Rollback notification
+            if [ "${{ needs.deployuat.result }}" == "success" ]; then
+              echo "Rollback successful: Reverted to version ${{ inputs.rollback_version }} in UAT"
+            else
+              echo "Rollback failed: Could not revert to version ${{ inputs.rollback_version }} in UAT"
+            fi
+          else
+            # Normal deployment notification
+            if [ "${{ needs.deployuat.result }}" == "success" ]; then
+              echo "Deployment successful: Version ${{ needs.build.outputs.jar_version }} deployed to UAT"
+            elif [ "${{ needs.deployuat.result }}" == "failure" ]; then
+              echo "Deployment failed: Automatic rollback attempted for UAT"
+            else
+              echo "⚠Deployment status: ${{ needs.deployuat.result }}"
+            fi
+          fi
+
+      # Create deployment summary
+      - name: Create deployment summary
+        if: always()
+        run: |
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -n "${{ inputs.rollback_version }}" ]; then
+            echo "**Type**: Rollback" >> $GITHUB_STEP_SUMMARY
+            echo "**Target Version**: ${{ inputs.rollback_version }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Type**: Normal Deployment" >> $GITHUB_STEP_SUMMARY
+            echo "**Version**: ${{ needs.build.outputs.jar_version }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "**Environment**: UAT" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ needs.deployuat.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run ID**: ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.deployuat.result }}" == "success" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Deployment completed successfully**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Deployment failed**" >> $GITHUB_STEP_SUMMARY
+          fi
          
