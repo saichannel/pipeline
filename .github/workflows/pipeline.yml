@@ -279,18 +279,28 @@ jobs:
         if: steps.uat_deploy.outcome == 'success'
         run: |
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          mkdir -p rollback-jars/$VERSION
-          cp target/*.jar rollback-jars/$VERSION/
-          echo "$VERSION" > rollback-jars/$VERSION/version.txt
-
+          mkdir -p tmp-rollback-jars/$VERSION
+          cp target/*.jar tmp-rollback-jars/$VERSION/
+          echo "$VERSION" > tmp-rollback-jars/$VERSION/version.txt
+      
+          # Configure Git
           git config user.name "github-actions"
           git config user.email "actions@github.com"
+      
+          # Clone rollback-artifacts branch into a temp directory
           git fetch origin rollback-artifacts
-          git checkout rollback-artifacts
-          cp -r rollback-jars/$VERSION .
+          git worktree add rollback-work rollback-artifacts
+      
+          # Copy rollback JAR to worktree
+          mkdir -p rollback-work/rollback-jars/$VERSION
+          cp tmp-rollback-jars/$VERSION/* rollback-work/rollback-jars/$VERSION/
+      
+          # Commit and push
+          cd rollback-work
           git add rollback-jars/$VERSION
           git commit -m "Add rollback artifact for version $VERSION"
           git push origin rollback-artifacts
+
 
 
 
