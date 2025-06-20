@@ -576,7 +576,7 @@ jobs:
             -Danypoint.username="${{ secrets.USER }}" \
             -Danypoint.password="${{ secrets.PASS }}" \
             -Danypoint.businessGroup="${{ secrets.DEV_BUSINESS_GROUP }}" \
-            -Denv=dev \
+            -Denv=${{ secrets.ENV }} \
             -Dappname="${{ secrets.DEV_APP_NAME }}" \
             -Danypoint.platform.client_id="${{ secrets.DEV_CLIENT_ID }}" \
             -Danypoint.platform.client_secret="${{ secrets.DEV_CLIENT_SECRET }}"
@@ -595,7 +595,7 @@ jobs:
             -Danypoint.username="${{ secrets.USER }}" \
             -Danypoint.password="${{ secrets.PASS }}" \
             -Danypoint.businessGroup="${{ secrets.UAT_BUSINESS_GROUP }}" \
-            -Denv=uat \
+            -Denv=${{ secrets.ENV }} \
             -Dappname="${{ secrets.UAT_APP_NAME }}" \
             -Danypoint.platform.client_id="${{ secrets.UAT_CLIENT_ID }}" \
             -Danypoint.platform.client_secret="${{ secrets.UAT_CLIENT_SECRET }}"
@@ -614,7 +614,7 @@ jobs:
             -Danypoint.username="${{ secrets.USER }}" \
             -Danypoint.password="${{ secrets.PASS }}" \
             -Danypoint.businessGroup="${{ secrets.PROD_BUSINESS_GROUP }}" \
-            -Denv=prod \
+            -Denv=${{ secrets.ENV }} \
             -Dappname="${{ secrets.PROD_APP_NAME }}" \
             -Danypoint.platform.client_id="${{ secrets.PROD_CLIENT_ID }}" \
             -Danypoint.platform.client_secret="${{ secrets.PROD_CLIENT_SECRET }}"
