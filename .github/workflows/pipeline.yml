@@ -233,11 +233,7 @@ jobs:
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: ${{ runner.os }}-maven-
 
-      # - name: Download JAR from build
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: application-jar
-      #     path: target/
+      
 
       - name: Deploy to Dev
         run: |
@@ -260,6 +256,12 @@ jobs:
         with:
           name: mulesoft-artifacts
           path: .
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
 
       - name: Store deployment info
         id: deployment_info
@@ -274,12 +276,12 @@ jobs:
           name: deployment-history
           path: deployment-history.csv
           retention-days: 90
-      - name: Cache dependencies
-        uses: actions/cache@v4
+          
+      - name: Download JAR from build
+        uses: actions/download-artifact@v4
         with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-maven-
+          name: application-jar
+          path: target/
 
       - name: Deploy to UAT
         run: |
