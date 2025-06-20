@@ -416,11 +416,13 @@
 
 
 
------- main code ----- without rollback
+#------ main code ----- without rollback
 name: Reusable Workflow To Deploy MuleSoft Application
  
 on:
-  workflow_call:
+ push:
+  branches: [ main ]
+ workflow_call:
 
 jobs:
   build:
