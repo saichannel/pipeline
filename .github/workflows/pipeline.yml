@@ -170,7 +170,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       jar_version: ${{ steps.set_version.outputs.jar_version }}
-      jar_name: ${{ steps.set_version.outputs.jar_name }}  # Added JAR name output
+      jar_name: ${{ steps.set_version.outputs.jar_name }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -188,22 +188,26 @@ jobs:
           distribution: "zulu"
           java-version: 17
 
-      - name: Build and publish
+      - name: Build with Maven
         run: |
-          mvn clean package deploy \
-            --settings .settings/org.eclipse.core.resources.prefs \
-            -DmuleDeploy -DskipMunitTests \
-            -Danypoint.username="${{ secrets.USER }}" \
-            -Danypoint.password="${{ secrets.PASS }}"
+          # Build without install/deploy first
+          mvn clean package -DmuleDeploy -DskipMunitTests
 
       - name: Get JAR info
         id: set_version
         run: |
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          JAR_NAME=$(ls target/*.jar | xargs -n1 basename)
+          JAR_NAME=$(ls target/*.jar | head -1 | xargs basename)
           echo "jar_version=$VERSION" >> $GITHUB_OUTPUT
           echo "jar_name=$JAR_NAME" >> $GITHUB_OUTPUT
-          echo "JAR_NAME=$JAR_NAME" >> $GITHUB_ENV  # Also set as environment variable
+          echo "JAR_NAME=$JAR_NAME" >> $GITHUB_ENV
+
+      - name: Publish to Exchange
+        run: |
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs \
+            -DskipMunitTests \
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -281,7 +285,6 @@ jobs:
           name: rollback-${{ needs.build.outputs.jar_version }}
           path: target/${{ env.JAR_NAME }}
           retention-days: 30
-
 
 
 # name: Reusable Workflow To Deploy MuleSoft Application
