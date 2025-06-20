@@ -292,58 +292,6 @@ jobs:
           retention-days: 30
 
 
-this is my main.yml
-
-name: Manual Rollback to UAT
-
-on:
-  workflow_dispatch:
-    inputs:
-      confirm_rollback:
-        description: 'Confirm rollback to the last successful UAT version? (yes)'
-        required: true
-        default: 'no'
-
-jobs:
-  rollback-uat:
-    if: github.event.inputs.confirm_rollback == 'yes'
-    runs-on: ubuntu-latest
-    environment: uat
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Download rollback artifact from UAT
-        uses: actions/download-artifact@v4
-        with:
-          name: rollback-uat
-          path: target/
-
-      - name: Extract version from rollback JAR
-        id: extract_version
-        run: |
-          FILE=$(ls target/*.jar | head -n 1)
-          VERSION=$(basename "$FILE" | grep -oP '(?<=-)[0-9]+\.[0-9]+\.[0-9]+(?=\.jar)')
-          echo "Rollback version: $VERSION"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Redeploy rollback JAR to UAT
-        run: |
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-            -Danypoint.username="${{ secrets.USER }}" \
-            -Danypoint.password="${{ secrets.PASS }}" \
-            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-            -Denv="${{ secrets.ENV }}" \
-            -Dappname="${{ secrets.APP_NAME }}" \
-            -Dversion="${{ steps.extract_version.outputs.version }}" \
-            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
-
-
-
-  
-
 # name: Reusable Workflow To Deploy MuleSoft Application
  
 # on:
