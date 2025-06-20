@@ -163,7 +163,7 @@ name: Reusable Workflow To Deploy MuleSoft Application
 
 on:
   workflow_call:
-  workflow_dispatch:  # Allows manual trigger for testing
+  workflow_dispatch:
 
 jobs:
   build:
@@ -206,8 +206,8 @@ jobs:
       - name: Publish to Exchange
         run: |
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests \
-          -Danypoint.username="${{ secrets.USER }}" \
-          -Danypoint.password="${{ secrets.PASS }}"
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}"
 
   deploydev:
     needs: build
@@ -233,13 +233,13 @@ jobs:
       - name: Deploy to Dev
         run: |
           mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
-          -Danypoint.username="${{ secrets.USER }}" \
-          -Danypoint.password="${{ secrets.PASS }}" \
-          -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-          -Denv="${{ secrets.ENV }}" \
-          -Dappname="${{ secrets.APP_NAME }}" \
-          -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-          -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+            -Danypoint.username="${{ secrets.USER }}" \
+            -Danypoint.password="${{ secrets.PASS }}" \
+            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+            -Denv="${{ secrets.ENV }}" \
+            -Dappname="${{ secrets.APP_NAME }}" \
+            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
   deployuat:
     needs: deploydev
@@ -278,16 +278,19 @@ jobs:
       - name: Save rollback JAR for UAT
         if: steps.uat_deploy.outcome == 'success'
         run: |
-          mkdir -p rollback-uat
-          cp target/*.jar rollback-uat/
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          mkdir -p rollback-uat/$VERSION
+          cp target/*.jar rollback-uat/$VERSION/
+          echo "version=$VERSION" > rollback-uat/$VERSION/info.txt
 
       - name: Upload rollback artifact
         if: steps.uat_deploy.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
-          name: rollback-uat
-          path: rollback-uat/*.jar
-          retention-days: 7
+          name: rollback-uat-${{ github.run_id }}
+          path: rollback-uat/
+          retention-days: 30
+
 
 this is my main.yml
 
