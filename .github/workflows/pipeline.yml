@@ -223,23 +223,32 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - name: Checkout this repo
+        uses: actions/checkout@v4
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
         with:
-          name: mulesoft-artifacts
-          path: .
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      # - name: Download JAR from build
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: application-jar
+      #     path: target/
 
       - name: Deploy to Dev
         run: |
-          mvn deploy --settings .settings/org.eclipse.core.resources.prefs \
-            -DskipMunitTests -DmuleDeploy \
-            -Danypoint.username="${{ secrets.USER }}" \
-            -Danypoint.password="${{ secrets.PASS }}" \
-            -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
-            -Denv="${{ secrets.ENV }}" \
-            -Dappname="${{ secrets.APP_NAME }}" \
-            -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
-            -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
+          mvn deploy --settings .settings/org.eclipse.core.resources.prefs -DskipMunitTests -DmuleDeploy \
+          -Danypoint.username="${{ secrets.USER }}" \
+          -Danypoint.password="${{ secrets.PASS }}" \
+          -Danypoint.businessGroup="${{ secrets.ANYPOINT_ORG_ID }}" \
+          -Denv="${{ secrets.ENV }}" \
+          -Dappname="${{ secrets.APP_NAME }}" \
+          -Danypoint.platform.client_id="${{ secrets.ENV_CLIENT_ID }}" \
+          -Danypoint.platform.client_secret="${{ secrets.ENV_CLIENT_SECRET }}"
 
   deployuat:
     needs: deploydev
@@ -265,6 +274,12 @@ jobs:
           name: deployment-history
           path: deployment-history.csv
           retention-days: 90
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
 
       - name: Deploy to UAT
         run: |
