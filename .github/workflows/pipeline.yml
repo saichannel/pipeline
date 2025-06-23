@@ -279,9 +279,10 @@ jobs:
         if: steps.uat_deploy.outcome == 'success'
         run: |
           VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
-          mkdir -p rollback-uat/$VERSION
-          cp target/*.jar rollback-uat/$VERSION/
-          echo "version=$VERSION" > rollback-uat/$VERSION/info.txt
+          mkdir -p rollback-uat
+          cp target/*.jar rollback-uat/
+          echo "$VERSION" > rollback-uat/version.txt
+          echo "${{ github.run_id }}" > rollback-uat/run_id.txt
 
       - name: Upload rollback artifact
         if: steps.uat_deploy.outcome == 'success'
